@@ -220,15 +220,33 @@ fn build_catalog(entries: Vec<CatalogEntry>, region: &str) -> ServiceCatalog {
 
     for entry in entries {
         let iface_map = catalog.entry(entry.service_type.clone()).or_default();
+
+        // Two-pass: first collect only exact region matches, then fallback to any region.
+        // Within each pass, first-seen wins (don't overwrite).
+        let mut matched: HashMap<String, String> = HashMap::new();
+        let mut fallback: HashMap<String, String> = HashMap::new();
+
         for ep in &entry.endpoints {
-            // Prefer the matching region; fall back to any
             let is_right_region = ep
                 .region_id
                 .as_deref()
                 .map(|r| r == region)
-                .unwrap_or(true);
+                .unwrap_or(false);
+
             if is_right_region {
-                iface_map.insert(ep.interface.clone(), ep.url.clone());
+                matched.entry(ep.interface.clone()).or_insert_with(|| ep.url.clone());
+            } else {
+                fallback.entry(ep.interface.clone()).or_insert_with(|| ep.url.clone());
+            }
+        }
+
+        // Prefer matched region; fill in any missing interfaces from fallback
+        for (iface, url) in matched {
+            iface_map.entry(iface).or_insert(url);
+        }
+        if iface_map.is_empty() {
+            for (iface, url) in fallback {
+                iface_map.entry(iface).or_insert(url);
             }
         }
     }

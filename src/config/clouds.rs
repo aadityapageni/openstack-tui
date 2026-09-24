@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -13,7 +13,9 @@ pub struct CloudsFile {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CloudConfig {
     pub auth: AuthConfig,
-    #[serde(default = "default_region")]
+    /// Accept both `region_name: RegionOne` (scalar) and `regions: [RegionOne, RegionTwo]` (list).
+    /// We always use the first one.
+    #[serde(deserialize_with = "deserialize_region", default = "default_region")]
     pub region_name: String,
     #[serde(default = "default_interface")]
     pub interface: String,
@@ -26,13 +28,34 @@ pub struct CloudConfig {
     pub cacert: Option<String>,
 }
 
+/// Deserializes either a scalar string or a list of strings,
+/// always returning the first element.
+fn deserialize_region<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum RegionField {
+        Single(String),
+        List(Vec<String>),
+    }
+
+    match RegionField::deserialize(deserializer)? {
+        RegionField::Single(s) => Ok(s),
+        RegionField::List(v) => Ok(v.into_iter().next().unwrap_or_else(default_region)),
+    }
+}
+
 /// Auth sub-block inside a cloud entry
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AuthConfig {
     pub auth_url: String,
     pub username: String,
     pub password: String,
+    #[serde(default = "default_project")]
     pub project_name: String,
+    pub project_id: Option<String>,
     #[serde(default = "default_domain")]
     pub user_domain_name: String,
     #[serde(default = "default_domain")]
@@ -53,6 +76,10 @@ fn default_identity_version() -> u8 {
 
 fn default_domain() -> String {
     "Default".to_string()
+}
+
+fn default_project() -> String {
+    "admin".to_string()
 }
 
 /// Load and parse a clouds.yaml file.
@@ -132,6 +159,22 @@ clouds:
     identity_api_version: 3
 "#;
 
+    const SAMPLE_REGIONS_LIST: &str = r#"
+clouds:
+  openstack:
+    auth:
+      auth_url: http://10.180.9.50:5000
+      username: admin
+      password: secret
+      project_name: admin
+      user_domain_name: Default
+    regions:
+    - RegionOne
+    - RegionTwo
+    interface: public
+    identity_api_version: 3
+"#;
+
     #[test]
     fn test_parse_sample() {
         let cf: CloudsFile = serde_yaml::from_str(SAMPLE).unwrap();
@@ -139,5 +182,14 @@ clouds:
         assert_eq!(cloud.auth.username, "admin");
         assert_eq!(cloud.region_name, "RegionOne");
         assert_eq!(cloud.interface, "internal");
+    }
+
+    #[test]
+    fn test_parse_regions_list() {
+        let cf: CloudsFile = serde_yaml::from_str(SAMPLE_REGIONS_LIST).unwrap();
+        let cloud = cf.clouds.get("openstack").unwrap();
+        // Should take the first element of the list
+        assert_eq!(cloud.region_name, "RegionOne");
+        assert_eq!(cloud.interface, "public");
     }
 }
