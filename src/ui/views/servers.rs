@@ -12,7 +12,11 @@ use crate::ui::theme;
 
 pub fn render(frame: &mut Frame, left: Rect, right: Rect, state: &AppState) {
     render_list(frame, left, state);
-    render_detail(frame, right, state);
+    if state.show_diagnostics {
+        render_diagnostics(frame, right, state);
+    } else {
+        render_detail(frame, right, state);
+    }
 }
 
 fn render_list(frame: &mut Frame, area: Rect, state: &AppState) {
@@ -196,4 +200,75 @@ fn truncate(s: &str, max: usize) -> String {
     } else {
         s.to_string()
     }
+}
+fn render_diagnostics(frame: &mut Frame, area: Rect, state: &AppState) {
+    let mut lines = vec![
+        Line::from(vec![
+            Span::styled("  Live Diagnostics (", theme::muted_style()),
+            Span::styled("s", theme::status_up_style()),
+            Span::styled(" to close) ", theme::muted_style()),
+        ]),
+        Line::from(""),
+    ];
+
+    if let Some(diag) = &state.diagnostics {
+        // CPU
+        lines.push(Line::from(Span::styled("  ── CPU ────────────────────────", theme::muted_style())));
+        if let Some(cpu_details) = diag.get("cpu_details").and_then(|v| v.as_array()) {
+            for (i, cpu) in cpu_details.iter().enumerate() {
+                let util = cpu.get("utilisation").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                lines.push(Line::from(vec![
+                    Span::styled(format!("  Core {:<2} : ", i), theme::muted_style()),
+                    Span::raw(format!("{:5.1}%", util)),
+                ]));
+            }
+        } else {
+            lines.push(Line::from(Span::styled("  No CPU data", theme::muted_style())));
+        }
+        lines.push(Line::from(""));
+
+        // Memory
+        lines.push(Line::from(Span::styled("  ── Memory ─────────────────────", theme::muted_style())));
+        if let Some(mem) = diag.get("memory_details") {
+            let max = mem.get("maximum").and_then(|v| v.as_u64()).unwrap_or(0);
+            let used = mem.get("used").and_then(|v| v.as_u64()).unwrap_or(0);
+            lines.push(Line::from(vec![
+                Span::styled("  Used   : ", theme::muted_style()),
+                Span::raw(format!("{} MiB / {} MiB", used, max)),
+            ]));
+        } else {
+            lines.push(Line::from(Span::styled("  No Memory data", theme::muted_style())));
+        }
+        lines.push(Line::from(""));
+
+        // Network
+        lines.push(Line::from(Span::styled("  ── Network ────────────────────", theme::muted_style())));
+        if let Some(nics) = diag.get("nic_details").and_then(|v| v.as_array()) {
+            for (i, nic) in nics.iter().enumerate() {
+                let rx = nic.get("rx_octets").and_then(|v| v.as_u64()).unwrap_or(0);
+                let tx = nic.get("tx_octets").and_then(|v| v.as_u64()).unwrap_or(0);
+                let drop = nic.get("rx_drop").and_then(|v| v.as_u64()).unwrap_or(0);
+                lines.push(Line::from(vec![
+                    Span::styled(format!("  vNIC {:<2} : ", i), theme::muted_style()),
+                    Span::raw(format!("RX: {} B, TX: {} B (Drop: {})", rx, tx, drop)),
+                ]));
+            }
+        } else {
+            lines.push(Line::from(Span::styled("  No NIC data", theme::muted_style())));
+        }
+    } else {
+        lines.push(Line::from(Span::styled("  Loading telemetry data...", theme::muted_style())));
+    }
+
+    let para = Paragraph::new(lines)
+        .block(
+            Block::default()
+                .title(" 󰓅 Diagnostics ")
+                .borders(Borders::ALL)
+                .border_style(theme::border_focused_style())
+                .style(Style::default().bg(theme::BG)),
+        )
+        .scroll((state.detail_scroll, 0));
+
+    frame.render_widget(para, area);
 }

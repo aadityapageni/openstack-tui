@@ -146,3 +146,11 @@ pub async fn list_nova_services(client: &OpenStackClient) -> Result<Vec<NovaServ
 
     Ok(resp.services)
 }
+
+pub async fn get_diagnostics(client: &OpenStackClient, server_id: &str) -> Result<serde_json::Value> {
+    let base = client.endpoint("compute")?;
+    let url = format!("{}/servers/{}/diagnostics", base, server_id);
+    tracing::debug!("GET {}", url);
+    let resp = client.get(&url).send().await?.error_for_status()?.json().await?;
+    Ok(resp)
+}

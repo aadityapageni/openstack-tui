@@ -79,6 +79,9 @@ pub struct AppState {
     pub search_active: bool,
     pub detail_scroll: u16,
     pub nodes_tab: u8,
+    pub diagnostics_active_server: Option<String>,
+    pub diagnostics: Option<serde_json::Value>,
+    pub show_diagnostics: bool,
 }
 
 impl AppState {
@@ -109,6 +112,9 @@ impl AppState {
             search_active: false,
             detail_scroll: 0,
             nodes_tab: 0,
+            diagnostics_active_server: None,
+            diagnostics: None,
+            show_diagnostics: false,
         }
     }
 
@@ -147,6 +153,18 @@ impl AppState {
 
     pub fn agents_dead(&self) -> usize {
         self.agents.iter().filter(|a| !a.alive).count()
+    }
+
+    pub fn get_selected_server_id(&self) -> Option<String> {
+        let filtered: Vec<_> = self.servers
+            .iter()
+            .filter(|s| {
+                self.search_query.is_empty()
+                    || s.name.to_lowercase().contains(&self.search_query.to_lowercase())
+            })
+            .collect();
+        let sel = self.selected_index.min(filtered.len().saturating_sub(1));
+        filtered.get(sel).map(|s| s.id.clone())
     }
 
     /// Token remaining time formatted for status bar

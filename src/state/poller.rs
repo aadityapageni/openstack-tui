@@ -32,6 +32,9 @@ pub async fn spawn_pollers(state: SharedState) {
 
     // ── Token refresher ────────────────────────────────────────────────────
     tokio::spawn(token_refresher(state.clone(), cfg.clone()));
+
+    // ── Diagnostics poller ─────────────────────────────────────────────────
+    tokio::spawn(diagnostics_poller(state.clone(), cfg.clone(), Duration::from_secs(2)));
 }
 
 // ── Helper: build a client from current shared state ─────────────────────────
@@ -235,6 +238,40 @@ async fn token_refresher(
                     tracing::info!("Token refreshed successfully");
                 }
                 Err(e) => tracing::error!("Token refresh failed: {:#}", e),
+            }
+        }
+    }
+}
+
+// ── Diagnostics poller ────────────────────────────────────────────────────────
+
+async fn diagnostics_poller(
+    state: SharedState,
+    _cfg: crate::config::clouds::CloudConfig,
+    interval: Duration,
+) {
+    let mut ticker = time::interval(interval);
+    loop {
+        ticker.tick().await;
+        
+        // Only fetch if a server is selected AND diagnostics is toggled on
+        let (server_id, should_fetch) = {
+            let s = state.lock().await;
+            (s.diagnostics_active_server.clone(), s.show_diagnostics)
+        };
+
+        if let (Some(id), true) = (server_id, should_fetch) {
+            match make_client(&state).await {
+                Ok(client) => {
+                    match crate::client::nova::get_diagnostics(&client, &id).await {
+                        Ok(diag) => {
+                            let mut s = state.lock().await;
+                            s.diagnostics = Some(diag);
+                        }
+                        Err(e) => tracing::warn!("Diagnostics poller error for {}: {:#}", id, e),
+                    }
+                }
+                Err(e) => tracing::error!("Diagnostics poller: failed to build client: {:#}", e),
             }
         }
     }

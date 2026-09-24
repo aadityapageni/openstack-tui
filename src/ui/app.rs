@@ -153,6 +153,25 @@ fn handle_key(
             state.detail_scroll = state.detail_scroll.saturating_add(5);
         }
 
+        // ── Diagnostics ────────────────────────────────────────────────────
+        KeyCode::Char('s') => {
+            if state.active_view == ActiveView::Servers {
+                state.show_diagnostics = !state.show_diagnostics;
+                state.diagnostics = None; // clear old data
+            }
+        }
+
         _ => {}
+    }
+
+    // Always keep the active server ID updated for the poller
+    if state.active_view == ActiveView::Servers && state.show_diagnostics {
+        let current_id = state.get_selected_server_id();
+        if state.diagnostics_active_server != current_id {
+            state.diagnostics_active_server = current_id;
+            state.diagnostics = None; // clear while loading
+        }
+    } else {
+        state.diagnostics_active_server = None;
     }
 }
