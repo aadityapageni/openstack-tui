@@ -78,6 +78,7 @@ pub struct AppState {
     pub search_query: String,
     pub search_active: bool,
     pub detail_scroll: u16,
+    pub nodes_tab: u8,
 }
 
 impl AppState {
@@ -107,6 +108,7 @@ impl AppState {
             search_query: String::new(),
             search_active: false,
             detail_scroll: 0,
+            nodes_tab: 0,
         }
     }
 

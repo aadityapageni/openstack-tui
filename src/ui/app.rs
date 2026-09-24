@@ -137,6 +137,14 @@ fn handle_key(
             state.search_query.clear();
         }
 
+        // ── Tab ────────────────────────────────────────────────────────────
+        KeyCode::Tab => {
+            if state.active_view == ActiveView::Nodes {
+                state.nodes_tab = 1 - state.nodes_tab;
+                state.selected_index = 0;
+            }
+        }
+
         // ── Detail pane scroll ─────────────────────────────────────────────
         KeyCode::Char('u') => {
             state.detail_scroll = state.detail_scroll.saturating_sub(5);

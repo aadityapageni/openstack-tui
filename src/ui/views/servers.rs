@@ -105,7 +105,7 @@ fn render_detail(frame: &mut Frame, area: Rect, state: &AppState) {
             _ => "Unknown",
         };
 
-        vec![
+        let mut base = vec![
             Line::from(vec![
                 Span::styled("  VM: ", theme::muted_style()),
                 Span::styled(&srv.name, theme::header_style()),
@@ -149,22 +149,30 @@ fn render_detail(frame: &mut Frame, area: Rect, state: &AppState) {
             ]),
             Line::from(""),
             Line::from(Span::styled("  ── Flavor ─────────────────────", theme::muted_style())),
-            Line::from({
-                if let Some(f) = &srv.flavor {
-                    vec![
-                        Span::styled("  vCPUs/RAM   : ", theme::muted_style()),
-                        Span::raw(format!(
-                            "{} vCPUs / {} MiB RAM / {} GiB disk",
-                            f.vcpus.unwrap_or(0),
-                            f.ram.unwrap_or(0),
-                            f.disk.unwrap_or(0)
-                        )),
-                    ]
-                } else {
-                    vec![Span::styled("  (flavor data unavailable)", theme::muted_style())]
-                }
-            }),
-        ]
+        ];
+
+        if let Some(f) = &srv.flavor {
+            base.push(Line::from(vec![
+                Span::styled("  Original Name: ", theme::muted_style()),
+                Span::raw(f.original_name.clone().unwrap_or_else(|| "-".to_string())),
+            ]));
+            base.push(Line::from(vec![
+                Span::styled("  vCPUs        : ", theme::muted_style()),
+                Span::raw(format!("{}", f.vcpus.unwrap_or(0))),
+            ]));
+            base.push(Line::from(vec![
+                Span::styled("  RAM          : ", theme::muted_style()),
+                Span::raw(format!("{} MiB", f.ram.unwrap_or(0))),
+            ]));
+            base.push(Line::from(vec![
+                Span::styled("  Disk         : ", theme::muted_style()),
+                Span::raw(format!("{} GiB", f.disk.unwrap_or(0))),
+            ]));
+        } else {
+            base.push(Line::from(Span::styled("  (flavor data unavailable)", theme::muted_style())));
+        }
+        
+        base
     } else {
         vec![Line::from(Span::styled("  No VM selected", theme::muted_style()))]
     };
