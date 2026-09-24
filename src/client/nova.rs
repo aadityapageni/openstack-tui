@@ -51,7 +51,7 @@ pub struct Server {
     pub created: Option<String>,
     pub updated: Option<String>,
     pub flavor: Option<FlavorRef>,
-    pub image: Option<ImageRef>,
+    pub image: Option<serde_json::Value>,
     pub addresses: Option<serde_json::Value>,
 }
 
